@@ -31,7 +31,7 @@ const SellerLayout = () => {
     <>
       <div className="flex items-center justify-between px-4 md:px-8 border-b border-gray-300 py-3 bg-white transition-all duration-300">
         <Link to={"/"}>
-          <h1 className="text-2xl font-semibold">Grocery Store App</h1>
+          <h1 className="text-2xl font-semibold">K Mart</h1>
         </Link>
         <div className="flex items-center gap-5 text-gray-500">
           <p>Hi! Admin</p>

@@ -2,7 +2,8 @@ import { assets } from "../assets/assets";
 import { useAppContext } from "../context/appContext";
 
 const ProductCard = ({ product }) => {
-  const { addToCart, removeFromCart, cartItems, navigate } = useAppContext();
+  const { addToCart, removeFromCart, cartItems, navigate, user } = useAppContext();
+  
   return (
     product && (
       <div
@@ -34,42 +35,45 @@ const ProductCard = ({ product }) => {
                 ₹{product.price}
               </span>
             </p>
-            <div
-              onClick={(e) => e.stopPropagation()}
-              className="text-red-500"
-            >
-              {!cartItems?.[product?._id] ? (
-                <button
-                  onClick={() => addToCart(product?._id)}
-                  className="flex items-center justify-center gap-1 bg-indigo-100 border border-indigo-300 md:w-[80px] w-[64px] h-[34px] rounded text-red-600 font-medium cursor-pointer"
-                >
-                  <img src={assets.cart_icon} alt="cart icon" />
-                  Add
-                </button>
-              ) : (
-                <div className="flex items-center justify-center gap-2 md:w-20 w-16 h-[34px] bg-indigo-500/25 rounded select-none">
-                  <button
-                    onClick={() => removeFromCart(product?._id)}
-                    className="cursor-pointer text-md px-2 h-full"
-                  >
-                    -
-                  </button>
-                  <span className="w-5 text-center">
-                    {cartItems[product?._id]}
-                  </span>
+            {user && (
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="text-red-500"
+              >
+                {!cartItems?.[product?._id] ? (
                   <button
                     onClick={() => addToCart(product?._id)}
-                    className="cursor-pointer text-md px-2 h-full"
+                    className="flex items-center justify-center gap-1 bg-indigo-100 border border-indigo-300 md:w-[80px] w-[64px] h-[34px] rounded text-red-600 font-medium cursor-pointer"
                   >
-                    +
+                    <img src={assets.cart_icon} alt="cart icon" />
+                    Add
                   </button>
-                </div>
-              )}
-            </div>
+                ) : (
+                  <div className="flex items-center justify-center gap-2 md:w-20 w-16 h-[34px] bg-indigo-500/25 rounded select-none">
+                    <button
+                      onClick={() => removeFromCart(product?._id)}
+                      className="cursor-pointer text-md px-2 h-full"
+                    >
+                      -
+                    </button>
+                    <span className="w-5 text-center">
+                      {cartItems[product?._id]}
+                    </span>
+                    <button
+                      onClick={() => addToCart(product?._id)}
+                      className="cursor-pointer text-md px-2 h-full"
+                    >
+                      +
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
     )
   );
 };
+
 export default ProductCard;
