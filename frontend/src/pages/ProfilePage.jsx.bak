@@ -1,0 +1,513 @@
+import { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  User, Mail, Phone, Lock, Camera, Save, Plus, Trash2,
+  Check, Edit3, MapPin, Eye, EyeOff, Wallet,
+  ArrowUpRight, ArrowDownLeft, CreditCard
+} from "lucide-react";
+import { useUserStore } from "../stores/useUserStore";
+import { useSearchParams, useNavigate } from "react-router-dom";
+import axios from "../lib/axios";
+import toast from "react-hot-toast";
+
+// ─── Avatar Upload ────────────────────────────────────
+function AvatarSection({ user, onUpdate }) {
+  const inputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handleFile = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { toast.error("Image must be under 5MB"); return; }
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      setUploading(true);
+      try {
+        const r = await axios.post("/users/me/avatar", { image: reader.result });
+        onUpdate({ profilePic: r.data.profilePic });
+        toast.success("Profile picture updated!");
+      } catch { toast.error("Upload failed"); }
+      setUploading(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <div className="flex flex-col items-center">
+      <div className="relative mb-3">
+        <div className="w-24 h-24 rounded-full overflow-hidden border-4 shadow-md" style={{ borderColor: "var(--blue-light)" }}>
+          {user?.profilePic
+            ? <img src={user.profilePic} alt="" className="w-full h-full object-cover" />
+            : <div className="w-full h-full flex items-center justify-center text-white text-4xl font-black"
+                style={{ background: "linear-gradient(135deg,var(--blue),var(--purple))" }}>
+                {user?.name?.[0]?.toUpperCase() || "U"}
+              </div>
+          }
+        </div>
+        <button
+          onClick={() => inputRef.current?.click()}
+          disabled={uploading}
+          className="absolute bottom-0 right-0 w-8 h-8 rounded-full flex items-center justify-center shadow-md transition-all hover:scale-110 disabled:opacity-60"
+          style={{ background: "var(--blue)", color: "#fff" }}
+        >
+          {uploading
+            ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            : <Camera className="w-4 h-4" />
+          }
+        </button>
+        <input ref={inputRef} type="file" accept="image/*" className="sr-only" onChange={handleFile} />
+      </div>
+      <p className="font-black text-lg" style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", color: "var(--blue)" }}>{user?.name}</p>
+      <p className="text-xs" style={{ color: "var(--ink-4)" }}>{user?.email}</p>
+    </div>
+  );
+}
+
+// ─── Address Form ─────────────────────────────────────
+function AddressForm({ initial, onSave, onCancel }) {
+  const [form, setForm] = useState(initial || { label: "Home", fullName: "", phone: "", line1: "", line2: "", city: "", state: "", pincode: "", isDefault: false });
+  const [saving, setSaving] = useState(false);
+
+  const fields = [
+    { key: "fullName", label: "Full Name *",         placeholder: "Recipient name",     half: false },
+    { key: "phone",    label: "Phone *",             placeholder: "10-digit mobile",    half: false },
+    { key: "line1",    label: "Address Line 1 *",    placeholder: "House/Flat, Street", half: false },
+    { key: "line2",    label: "Address Line 2",      placeholder: "Landmark (optional)",half: false },
+    { key: "city",     label: "City *",              placeholder: "City",               half: true  },
+    { key: "state",    label: "State *",             placeholder: "State",              half: true  },
+    { key: "pincode",  label: "Pincode *",           placeholder: "6-digit",            half: true  },
+  ];
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.fullName || !form.phone || !form.line1 || !form.city || !form.state || !form.pincode) {
+      toast.error("Please fill all required fields"); return;
+    }
+    setSaving(true);
+    await onSave(form);
+    setSaving(false);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-3">
+      <div className="flex gap-2 mb-1">
+        {["Home", "Work", "Other"].map(l => (
+          <button type="button" key={l} onClick={() => setForm(f => ({ ...f, label: l }))}
+            className="px-4 py-1.5 rounded-full text-xs font-bold border-2 transition-all"
+            style={{ borderColor: form.label === l ? "var(--blue)" : "var(--border)", background: form.label === l ? "var(--blue-pale)" : "#fff", color: form.label === l ? "var(--blue)" : "var(--ink-4)" }}>
+            {l === "Home" ? "🏠" : l === "Work" ? "💼" : "📍"} {l}
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        {fields.map(f => (
+          <div key={f.key} className={f.half ? "" : "col-span-2"}>
+            <label className="label">{f.label}</label>
+            <input value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
+              placeholder={f.placeholder} className="input text-sm" />
+          </div>
+        ))}
+      </div>
+      <label className="flex items-center gap-2 cursor-pointer">
+        <div onClick={() => setForm(f => ({ ...f, isDefault: !f.isDefault }))}
+          className="w-4 h-4 rounded border-2 flex items-center justify-center transition-all"
+          style={{ borderColor: form.isDefault ? "var(--blue)" : "var(--border)", background: form.isDefault ? "var(--blue)" : "#fff" }}>
+          {form.isDefault && <Check className="w-3 h-3 text-white" />}
+        </div>
+        <span className="text-sm font-medium" style={{ color: "var(--ink-2)" }}>Set as default address</span>
+      </label>
+      <div className="flex gap-2 pt-1">
+        <button type="submit" disabled={saving} className="btn btn-primary text-sm flex-1 py-2.5">{saving ? "Saving..." : "Save Address"}</button>
+        <button type="button" onClick={onCancel} className="btn btn-outline text-sm px-4">Cancel</button>
+      </div>
+    </form>
+  );
+}
+
+// ─── Wallet Section ───────────────────────────────────
+function WalletSection() {
+  const navigate = useNavigate();
+  const [balance, setBalance]           = useState(null);
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading]           = useState(true);
+
+  useEffect(() => {
+    axios.get("/users/me/wallet")
+      .then(r => { setBalance(r.data.balance); setTransactions(r.data.transactions.slice(0, 5)); })
+      .catch(() => toast.error("Failed to load wallet"))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return (
+    <div className="card p-6 flex items-center justify-center py-16">
+      <div className="w-7 h-7 rounded-full border-4 animate-spin"
+        style={{ borderColor: "var(--blue-light)", borderTopColor: "var(--blue)" }} />
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      {/* Balance card */}
+      <div className="rounded-2xl p-6 text-white relative overflow-hidden"
+        style={{ background: "linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)" }}>
+        <div className="absolute -right-6 -top-6 w-32 h-32 rounded-full opacity-10 bg-white" />
+        <div className="absolute -right-2 -bottom-6 w-24 h-24 rounded-full opacity-10 bg-white" />
+        <div className="relative z-10">
+          <div className="flex items-center gap-2 mb-3 opacity-80">
+            <Wallet className="w-4 h-4" />
+            <span className="text-sm font-semibold">K Mart Wallet</span>
+          </div>
+          <p className="text-4xl font-black mb-1">₹{(balance ?? 0).toFixed(2)}</p>
+          <p className="text-sm opacity-70">Available Balance</p>
+        </div>
+      </div>
+
+      {/* Recharge button */}
+      <button
+        onClick={() => navigate("/wallet")}
+        className="btn btn-primary w-full py-3 gap-2 text-base"
+        style={{ background: "linear-gradient(90deg, #2563eb, #7c3aed)" }}>
+        <CreditCard className="w-5 h-5" />
+        Manage Wallet / Add Money
+      </button>
+
+      {/* Recent transactions */}
+      <div className="card p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold text-sm" style={{ color: "var(--ink)" }}>Recent Transactions</h3>
+          <button onClick={() => navigate("/wallet")}
+            className="text-xs font-semibold" style={{ color: "var(--blue)" }}>
+            View All →
+          </button>
+        </div>
+        {transactions.length === 0 ? (
+          <p className="text-sm text-center py-6" style={{ color: "var(--ink-4)" }}>No transactions yet</p>
+        ) : (
+          <div className="space-y-3">
+            {transactions.map((tx, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
+                  style={{ background: tx.type === "credit" ? "var(--green-pale)" : "var(--red-pale)" }}>
+                  {tx.type === "credit"
+                    ? <ArrowDownLeft className="w-4 h-4" style={{ color: "var(--green)" }} />
+                    : <ArrowUpRight  className="w-4 h-4" style={{ color: "var(--red)"   }} />
+                  }
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold line-clamp-1" style={{ color: "var(--ink)" }}>{tx.description}</p>
+                  <p className="text-[10px]" style={{ color: "var(--ink-4)" }}>
+                    {new Date(tx.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                  </p>
+                </div>
+                <p className="font-black text-sm shrink-0"
+                  style={{ color: tx.type === "credit" ? "var(--green)" : "var(--red)" }}>
+                  {tx.type === "credit" ? "+" : "-"}₹{tx.amount.toFixed(0)}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── ProfilePage ──────────────────────────────────────
+export default function ProfilePage() {
+  const { user, checkAuth } = useUserStore();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get("tab") || "profile";
+  const setTab = (t) => setSearchParams({ tab: t });
+
+  const [profile, setProfile]       = useState(null);
+  const [addresses, setAddresses]   = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [editingAddr, setEditingAddr] = useState(null);
+  const [showPwd, setShowPwd]       = useState({ old: false, new: false, confirm: false });
+  const [profileForm, setProfileForm] = useState({ name: "", phone: "" });
+  const [pwdForm, setPwdForm]       = useState({ oldPassword: "", newPassword: "", confirmPassword: "" });
+  const [saving, setSaving]         = useState(false);
+
+  useEffect(() => {
+    Promise.all([
+      axios.get("/users/me"),
+      axios.get("/users/me/addresses"),
+    ]).then(([pr, ar]) => {
+      setProfile(pr.data);
+      setProfileForm({ name: pr.data.name, phone: pr.data.phone || "" });
+      setAddresses(ar.data.addresses);
+    }).catch(() => toast.error("Failed to load profile"))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const saveProfile = async (e) => {
+    e.preventDefault();
+    if (!profileForm.name.trim()) { toast.error("Name is required"); return; }
+    setSaving(true);
+    try {
+      const r = await axios.put("/users/me", profileForm);
+      setProfile(r.data);
+      checkAuth();
+      toast.success("Profile updated!");
+    } catch { toast.error("Failed to update"); }
+    setSaving(false);
+  };
+
+  const changePassword = async (e) => {
+    e.preventDefault();
+    if (pwdForm.newPassword !== pwdForm.confirmPassword) { toast.error("Passwords do not match"); return; }
+    if (pwdForm.newPassword.length < 6) { toast.error("Password must be at least 6 characters"); return; }
+    setSaving(true);
+    try {
+      await axios.put("/users/me/password", pwdForm);
+      toast.success("Password changed!");
+      setPwdForm({ oldPassword: "", newPassword: "", confirmPassword: "" });
+    } catch (e) { toast.error(e.response?.data?.message || "Failed to change password"); }
+    setSaving(false);
+  };
+
+  const saveAddress = async (form) => {
+    try {
+      if (editingAddr && editingAddr._id) {
+        const r = await axios.put(`/users/me/addresses/${editingAddr._id}`, form);
+        setAddresses(r.data.addresses);
+        toast.success("Address updated!");
+      } else {
+        const r = await axios.post("/users/me/addresses", form);
+        setAddresses(r.data.addresses);
+        toast.success("Address added!");
+      }
+      setEditingAddr(null);
+    } catch { toast.error("Failed to save address"); }
+  };
+
+  const deleteAddress = async (id) => {
+    if (!window.confirm("Delete this address?")) return;
+    try {
+      const r = await axios.delete(`/users/me/addresses/${id}`);
+      setAddresses(r.data.addresses);
+      toast.success("Address removed");
+    } catch { toast.error("Failed to delete"); }
+  };
+
+  const TABS = [
+    { id: "profile",   label: "My Profile",  icon: User   },
+    { id: "addresses", label: "Addresses",   icon: MapPin  },
+    { id: "wallet",    label: "My Wallet",   icon: Wallet  },
+    { id: "security",  label: "Security",    icon: Lock    },
+  ];
+
+  if (loading) return (
+    <div className="wrap py-16">
+      <div className="max-w-3xl mx-auto animate-pulse space-y-4">
+        <div className="skeleton h-8 w-48 rounded-xl" />
+        <div className="skeleton h-64 rounded-2xl" />
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ background: "var(--bg-2)", minHeight: "100vh" }}>
+      <div className="wrap py-8">
+        <h1 className="text-2xl md:text-3xl font-black mb-7"
+          style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", color: "var(--blue)" }}>
+          My Account
+        </h1>
+
+        <div className="grid md:grid-cols-[260px_1fr] gap-6 max-w-4xl">
+          {/* Sidebar */}
+          <div className="space-y-3">
+            <div className="card p-6">
+              <AvatarSection user={profile} onUpdate={(u) => setProfile(p => ({ ...p, ...u }))} />
+            </div>
+            <div className="card overflow-hidden">
+              {TABS.map(tab => {
+                const Icon   = tab.icon;
+                const active = activeTab === tab.id;
+                return (
+                  <button key={tab.id} onClick={() => setTab(tab.id)}
+                    className="flex items-center gap-3 w-full px-4 py-3.5 text-sm font-semibold text-left transition-all border-b last:border-0"
+                    style={{
+                      borderColor: "var(--border)",
+                      background:  active ? (tab.id === "wallet" ? "var(--purple-pale)" : "var(--blue-pale)") : "#fff",
+                      color:       active ? (tab.id === "wallet" ? "var(--purple)"     : "var(--blue)")      : "var(--ink-2)",
+                      borderLeft:  active ? `3px solid ${tab.id === "wallet" ? "var(--purple)" : "var(--blue)"}` : "3px solid transparent",
+                    }}>
+                    <Icon className="w-4 h-4 shrink-0" />
+                    {tab.label}
+                    {tab.id === "wallet" && (
+                      <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full"
+                        style={{ background: active ? "var(--purple)" : "var(--purple-pale)", color: active ? "#fff" : "var(--purple)" }}>
+                        NEW
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Main panel */}
+          <AnimatePresence mode="wait">
+            <motion.div key={activeTab}
+              initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }} transition={{ duration: .2 }}>
+
+              {/* ── Profile tab ── */}
+              {activeTab === "profile" && (
+                <div className="card p-6">
+                  <h2 className="text-lg font-black mb-5"
+                    style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", color: "var(--blue)" }}>
+                    Personal Information
+                  </h2>
+                  <form onSubmit={saveProfile} className="space-y-4">
+                    <div>
+                      <label className="label"><User className="inline w-3.5 h-3.5 mr-1" />Full Name</label>
+                      <input value={profileForm.name} onChange={e => setProfileForm(f => ({ ...f, name: e.target.value }))} placeholder="Your full name" className="input" />
+                    </div>
+                    <div>
+                      <label className="label"><Mail className="inline w-3.5 h-3.5 mr-1" />Email Address</label>
+                      <input value={profile?.email || ""} disabled className="input opacity-60 cursor-not-allowed" />
+                      <p className="text-xs mt-1" style={{ color: "var(--ink-4)" }}>Email cannot be changed</p>
+                    </div>
+                    <div>
+                      <label className="label"><Phone className="inline w-3.5 h-3.5 mr-1" />Phone Number</label>
+                      <input value={profileForm.phone} onChange={e => setProfileForm(f => ({ ...f, phone: e.target.value }))} placeholder="10-digit mobile number" className="input" />
+                    </div>
+                    <div className="pt-2">
+                      <button type="submit" disabled={saving} className="btn btn-primary py-2.5 px-8">
+                        <Save className="w-4 h-4" /> {saving ? "Saving..." : "Save Changes"}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {/* ── Addresses tab ── */}
+              {activeTab === "addresses" && (
+                <div className="card p-6">
+                  <div className="flex items-center justify-between mb-5">
+                    <h2 className="text-lg font-black"
+                      style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", color: "var(--blue)" }}>
+                      Saved Addresses
+                    </h2>
+                    {!editingAddr && (
+                      <button onClick={() => setEditingAddr("new")} className="btn btn-primary text-xs py-2 px-4">
+                        <Plus className="w-3.5 h-3.5" /> Add New
+                      </button>
+                    )}
+                  </div>
+
+                  {editingAddr && (
+                    <div className="mb-5 p-4 rounded-2xl border-2 border-dashed" style={{ borderColor: "var(--blue)", background: "var(--blue-pale)" }}>
+                      <h3 className="font-bold text-sm mb-4" style={{ color: "var(--blue)" }}>
+                        {editingAddr === "new" ? "Add New Address" : "Edit Address"}
+                      </h3>
+                      <AddressForm
+                        initial={editingAddr !== "new" ? editingAddr : null}
+                        onSave={saveAddress}
+                        onCancel={() => setEditingAddr(null)}
+                      />
+                    </div>
+                  )}
+
+                  {addresses.length === 0 && !editingAddr ? (
+                    <div className="text-center py-12">
+                      <MapPin className="w-10 h-10 mx-auto mb-3 opacity-20" style={{ color: "var(--blue)" }} />
+                      <p className="font-semibold mb-1" style={{ color: "var(--ink-2)" }}>No saved addresses</p>
+                      <p className="text-sm mb-4" style={{ color: "var(--ink-4)" }}>Add an address for faster checkout</p>
+                      <button onClick={() => setEditingAddr("new")} className="btn btn-primary text-sm">Add Address</button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {addresses.map(addr => (
+                        <div key={addr._id} className="p-4 rounded-2xl border-2 transition-all"
+                          style={{ borderColor: addr.isDefault ? "var(--blue)" : "var(--border)", background: addr.isDefault ? "var(--blue-pale)" : "#fff" }}>
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="badge badge-green capitalize">{addr.label}</span>
+                              {addr.isDefault && <span className="badge badge-new">⭐ Default</span>}
+                            </div>
+                            <div className="flex gap-2">
+                              <button onClick={() => setEditingAddr(addr)}
+                                className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-blue-50 transition-all"
+                                style={{ color: "var(--blue)" }}>
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button onClick={() => deleteAddress(addr._id)}
+                                className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-red-50 transition-all"
+                                style={{ color: "var(--red)" }}>
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                          <p className="font-semibold text-sm" style={{ color: "var(--ink)" }}>{addr.fullName}</p>
+                          <p className="text-sm mt-0.5" style={{ color: "var(--ink-2)" }}>
+                            {addr.line1}{addr.line2 ? ", " + addr.line2 : ""}, {addr.city}, {addr.state} - {addr.pincode}
+                          </p>
+                          <p className="text-xs mt-1" style={{ color: "var(--ink-4)" }}>📱 {addr.phone}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── Wallet tab ── */}
+              {activeTab === "wallet" && (
+                <div>
+                  <h2 className="text-lg font-black mb-5"
+                    style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", color: "var(--blue)" }}>
+                    My Wallet
+                  </h2>
+                  <WalletSection />
+                </div>
+              )}
+
+              {/* ── Security tab ── */}
+              {activeTab === "security" && (
+                <div className="card p-6">
+                  <h2 className="text-lg font-black mb-5"
+                    style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", color: "var(--blue)" }}>
+                    Change Password
+                  </h2>
+                  <form onSubmit={changePassword} className="space-y-4 max-w-sm">
+                    {[
+                      { key: "oldPassword",     label: "Current Password", field: "old"     },
+                      { key: "newPassword",     label: "New Password",     field: "new"     },
+                      { key: "confirmPassword", label: "Confirm Password", field: "confirm" },
+                    ].map(f => (
+                      <div key={f.key}>
+                        <label className="label"><Lock className="inline w-3.5 h-3.5 mr-1" />{f.label}</label>
+                        <div className="relative">
+                          <input
+                            type={showPwd[f.field] ? "text" : "password"}
+                            value={pwdForm[f.key]}
+                            onChange={e => setPwdForm(p => ({ ...p, [f.key]: e.target.value }))}
+                            placeholder="••••••••"
+                            className="input pr-10"
+                          />
+                          <button type="button"
+                            onClick={() => setShowPwd(p => ({ ...p, [f.field]: !p[f.field] }))}
+                            className="absolute right-3 top-1/2 -translate-y-1/2">
+                            {showPwd[f.field]
+                              ? <EyeOff className="w-4 h-4" style={{ color: "var(--ink-4)" }} />
+                              : <Eye    className="w-4 h-4" style={{ color: "var(--ink-4)" }} />
+                            }
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    <button type="submit" disabled={saving} className="btn btn-primary py-2.5 px-8 mt-2">
+                      <Lock className="w-4 h-4" /> {saving ? "Updating..." : "Update Password"}
+                    </button>
+                  </form>
+                </div>
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      </div>
+    </div>
+  );
+}
